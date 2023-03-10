@@ -485,6 +485,8 @@ class LocalFileSystem(FileSystem):
             Destination path to copy to. If None, use stdout.
         recursive : bool
             If True, copy a directory tree of files.
+        as_mount : bool
+            Copy files from mounted directories.
         """
         protos = {get_proto(path) for path in [src_path, dest_path] if path}
         if "local" not in protos:
@@ -714,6 +716,8 @@ class GSFileSystem(FsspecFileSystem):
             Destination path to copy to. If None, use stdout.
         recursive : bool
             If True, copy a directory tree of files.
+        as_mount : bool
+            Copy files from mounted directories.
         """
 
         def to_mount_directory(path):
@@ -1254,6 +1258,8 @@ class Dir(FileSet):
         ----------
         dest_path : str
             Destination path to copy to.
+        as_mount : bool
+            Copy files from mounted directories.
         """
         return self.filesystem.shell_copy(self.path, dest_path, recursive=True, as_mount=as_mount)
 

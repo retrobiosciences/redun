@@ -2,6 +2,7 @@ import json
 import os
 import pickle
 from functools import wraps
+from shlex import quote
 from typing import Callable, cast
 from unittest.mock import Mock, patch
 
@@ -187,7 +188,7 @@ def task1(x):
         [
             "redun",
             "--check-version",
-            REDUN_REQUIRED_VERSION,
+            quote(REDUN_REQUIRED_VERSION),
             "oneshot",
             expected_load_module,
             "--code",
@@ -269,7 +270,7 @@ def task1(x):
         [
             "redun",
             "--check-version",
-            REDUN_REQUIRED_VERSION,
+            quote(REDUN_REQUIRED_VERSION),
             "oneshot",
             "workflow",
             "--import-path",

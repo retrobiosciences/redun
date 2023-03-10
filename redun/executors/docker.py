@@ -59,6 +59,8 @@ def run_docker(
 
     Parameters
     ----------
+    executor_name : str
+        The name of the executor.
     command : List[str]
         A shell command to run within the docker container (e.g. ["ls" "-la"]).
     image : str

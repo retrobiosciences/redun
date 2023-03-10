@@ -697,10 +697,10 @@ def test_staging_render_gs() -> None:
     Should be able to render stage commands for gs.
     """
     cmd = File("gs://bucket/remote.txt").stage("local.txt").render_stage()
-    assert cmd == "gsutil cp gs://bucket/remote.txt local.txt"
+    assert cmd == "gcloud storage cp gs://bucket/remote.txt local.txt"
 
     cmd = File("gs://bucket/remote.txt").stage("local.txt").render_unstage()
-    assert cmd == "gsutil cp local.txt gs://bucket/remote.txt"
+    assert cmd == "gcloud storage cp local.txt gs://bucket/remote.txt"
 
 
 def test_render_stage_quote() -> None:
@@ -867,25 +867,28 @@ def test_shell_copy_gs() -> None:
 
     assert (
         File("gs://bucket/src.txt").shell_copy_to("gs://bucket/dest.txt")
-        == "gsutil cp gs://bucket/src.txt gs://bucket/dest.txt"
+        == "gcloud storage cp gs://bucket/src.txt gs://bucket/dest.txt"
     )
     assert (
         File("gs://bucket/src.txt").shell_copy_to("dest.txt")
-        == "gsutil cp gs://bucket/src.txt dest.txt"
+        == "gcloud storage cp gs://bucket/src.txt dest.txt"
     )
     assert (
         File("src.txt").shell_copy_to("gs://bucket/dest.txt")
-        == "gsutil cp src.txt gs://bucket/dest.txt"
+        == "gcloud storage cp src.txt gs://bucket/dest.txt"
     )
-    assert File("gs://bucket/src.txt").shell_copy_to(None) == "gsutil cp gs://bucket/src.txt -"
+    assert (
+        File("gs://bucket/src.txt").shell_copy_to(None)
+        == "gcloud storage cat gs://bucket/src.txt -"
+    )
     assert (
         get_filesystem("gs").shell_copy(None, "gs://bucket/dest.txt")
-        == "gsutil cp - gs://bucket/dest.txt"
+        == "gcloud storage cp - gs://bucket/dest.txt"
     )
 
     assert (
         get_filesystem("gs").shell_copy("gs://bucket/src", "gs://bucket/dest", recursive=True)
-        == "gsutil cp -r gs://bucket/src gs://bucket/dest/"
+        == "gcloud storage cp -r gs://bucket/src gs://bucket/dest/"
     )
     with pytest.raises(ValueError):
         assert get_filesystem("gs").shell_copy("gs://bucket/src", None, recursive=True)
@@ -898,7 +901,7 @@ def test_shell_copy_fs() -> None:
     # Cross cloud shell copies.
     assert (
         File("s3://bucket/src.txt").shell_copy_to("gs://bucket/dest.txt")
-        == "(aws s3 cp --no-progress s3://bucket/src.txt -) | (gsutil cp - gs://bucket/dest.txt)"
+        == "(aws s3 cp --no-progress s3://bucket/src.txt -) | (gcloud storage cp - gs://bucket/dest.txt)"
     )
     assert (
         File("http://example.com/src.txt").shell_copy_to("gs://bucket/dest.txt")
