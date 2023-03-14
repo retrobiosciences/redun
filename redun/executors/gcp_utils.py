@@ -35,7 +35,7 @@ def batch_submit(
     region: str,
     mount_buckets: List[str],
     gcs_scratch_prefix: str,
-    machine_type: str,
+    machine_type: Optional[str],
     vcpus: int,
     memory: int,
     task_count: int,
