@@ -253,12 +253,10 @@ class MachineType:
 @cache
 def get_available_machine_types(region: str) -> List[MachineType]:
     CLOUD_INFO_API = "https://cloudinfo.seqera.io/api/v1"
-    request = requests.get(
-        f"{CLOUD_INFO_API}/providers/google/services/compute/regions/{region}/products",
-        timeout=30,
-    )
+    API_URL = f"{CLOUD_INFO_API}/providers/google/services/compute/regions/{region}/products"
+    request = requests.get(API_URL, timeout=30)
     if request.status_code != 200:
-        raise RuntimeError(f"Error getting machine types: {request.text}")
+        raise RuntimeError(f"Error getting machine types from url '{API_URL}'!\nSpecify machine type manually.")
     result: List[Dict] = request.json()["products"]
     return [
         MachineType(
@@ -286,7 +284,7 @@ def find_best_matching_machine_type(
 ) -> str:
     if gpus > 0:
         # seqera's cloudinfo doesn't have GPU prices yet
-        raise NotImplementedError("Automatic machine type selection is not implemented yet for GPU instances.")
+        raise NotImplementedError("Automatic machine type selection is not implemented yet for GPU instances. Specify machine type manually.")
     FAMILY_COST_CORRECTION = {
         "e2": 1.0,  # Mix of processors, tend to be similar in performance to N1
         # INTEL
