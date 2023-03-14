@@ -52,6 +52,7 @@ def batch_submit(
     commands: List[str] = ["exit 0"],
     service_account_email: str = "",
     labels: Dict[str, str] = {},
+    gpus: int = 0,
     **kwargs,  # Ignore extra args
 ) -> batch_v1.Job:
     # Define what will be done as part of the job.
@@ -112,7 +113,8 @@ def batch_submit(
     if not machine_type:
         machine_type = find_best_matching_machine_type(
             cpus=vcpus, memory=memory, region=region,
-            spot=provisioning_model == "spot", local_ssd=False
+            spot=provisioning_model == "spot", local_ssd=False,
+            gpus=gpus, min_cpu_platform=min_cpu_platform
         )
     allocation_policy = batch_v1.AllocationPolicy()
     policy = batch_v1.AllocationPolicy.InstancePolicy()
@@ -278,9 +280,13 @@ def find_best_matching_machine_type(
     region: str,
     spot: bool,
     local_ssd: bool,
+    gpus: int = 0,
     families: Optional[List[str]] = None,
     min_cpu_platform: Optional[MinCPUPlatform] = None,
 ) -> str:
+    if gpus > 0:
+        # seqera's cloudinfo doesn't have GPU prices yet
+        raise NotImplementedError("Automatic machine type selection is not implemented yet for GPU instances.")
     FAMILY_COST_CORRECTION = {
         "e2": 1.0,  # Mix of processors, tend to be similar in performance to N1
         # INTEL
@@ -322,7 +328,7 @@ def find_best_matching_machine_type(
     valid_machine_types = [
         e
         for e in machine_types
-        if e.cpus >= cpus and e.memory >= memory
+        if e.cpus >= cpus and e.memory >= memory and e.gpus >= gpus
         # either no family restriction or family has to at least start with one of the families
         and (not families or any(e.family.startswith(fam) for fam in families))
     ]
