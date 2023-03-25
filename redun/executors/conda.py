@@ -1,18 +1,19 @@
 """
 Redun Executor class for running tasks and scripts in a local conda environment.
 """
+from configparser import SectionProxy
 import os
 import pickle
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from shlex import quote
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, mkdtemp
 from typing import Any, Dict, List, Optional, Tuple
 
 from redun.config import create_config_section
-from redun.executors import aws_utils
 from redun.executors.base import Executor, register_executor
 from redun.scheduler import Job, Scheduler, Traceback
+from redun.executors.command import get_oneshot_command
 from redun.scripting import ScriptError, get_task_command
 from redun.utils import get_import_paths, pickle_dump
 
@@ -23,7 +24,12 @@ class CondaExecutor(Executor):
     Executor that runs tasks and scripts in a local conda environment.
     """
 
-    def __init__(self, name: str, scheduler: Scheduler = None, config=None):
+    def __init__(
+        self,
+        name: str,
+        scheduler: Optional[Scheduler] = None,
+        config: Optional[SectionProxy] = None,
+    ):
         super().__init__(name, scheduler=scheduler)
 
         # Parse config.
@@ -32,13 +38,40 @@ class CondaExecutor(Executor):
 
         self.max_workers = config.getint("max_workers", 20)
         self.default_env = config.get("conda_environment")
+        self._scratch_prefix_rel = config.get("scratch", ".scratch_redun")
+        self._scratch_prefix_abs: Optional[str] = None
 
         self._thread_executor: Optional[ThreadPoolExecutor] = None
+
+    @property
+    def _scratch_prefix(self) -> str:
+        if not self._scratch_prefix_abs:
+            if os.path.isabs(self._scratch_prefix_rel):
+                self._scratch_prefix_abs = self._scratch_prefix_rel
+            else:
+                # TODO: Is there a better way to find the path of the current
+                # config dir?
+                try:
+                    assert self._scheduler
+                    base_dir = os.path.abspath(
+                        self._scheduler.config["repos"]["default"]["config_dir"]
+                    )
+                except KeyError:
+                    # Use current working directory as base_dir if default
+                    # config_dir cannot be found.
+                    base_dir = os.getcwd()
+
+                self._scratch_prefix_abs = os.path.normpath(
+                    os.path.join(base_dir, self._scratch_prefix_rel)
+                )
+        assert self._scratch_prefix_abs
+        return self._scratch_prefix_abs
 
     def _start(self) -> None:
         """
         Start pool on first Job submission.
         """
+        os.makedirs(self._scratch_prefix, exist_ok=True)
         if not self._thread_executor:
             self._thread_executor = ThreadPoolExecutor(max_workers=self.max_workers)
 
@@ -50,7 +83,7 @@ class CondaExecutor(Executor):
             self._thread_executor.shutdown()
             self._thread_executor = None
 
-    def _submit(self, job: Job, args: Tuple, kwargs: dict) -> None:
+    def _submit(self, job: Job) -> None:
         # Ensure pool are started.
         self._start()
 
@@ -61,24 +94,26 @@ class CondaExecutor(Executor):
         def on_done(future):
             success, result = future.result()
             if success:
-                self.scheduler.done_job(job, result)
+                self._scheduler.done_job(job, result)
             else:
                 error, traceback = result
-                self.scheduler.reject_job(job, error, traceback)
+                self._scheduler.reject_job(job, error, traceback)
 
+        assert job.args
+        args, kwargs = job.args
         self._thread_executor.submit(
-            execute, job, self.get_job_env(job), args, kwargs
+            execute, self._scratch_prefix, job, self.get_job_env(job), job.task.fullname, args, kwargs
         ).add_done_callback(on_done)
 
-    def submit(self, job: Job, args: Tuple, kwargs: dict) -> None:
+    def submit(self, job: Job) -> None:
         assert job.task
         assert not job.task.script
-        self._submit(job, args, kwargs)
+        self._submit(job)
 
-    def submit_script(self, job: Job, args: Tuple, kwargs: dict) -> None:
+    def submit_script(self, job: Job) -> None:
         assert job.task
         assert job.task.script
-        self._submit(job, args, kwargs)
+        self._submit(job)
 
     def get_job_env(self, job: Job) -> str:
         """
@@ -91,8 +126,10 @@ class CondaExecutor(Executor):
 
 
 def execute(
+    scratch_path: str,
     job: Job,
     env_name: str,
+    task_fullname: str,
     args: Tuple = (),
     kwargs: Dict[str, Any] = None,
 ) -> Tuple[bool, Any]:
@@ -103,76 +140,38 @@ def execute(
 
     if kwargs is None:
         kwargs = {}
-    with TemporaryDirectory() as task_files_dir:
-        input_path = os.path.join(task_files_dir, "input")
-        output_path = os.path.join(task_files_dir, "output")
-        error_path = os.path.join(task_files_dir, "error")
+    task_files_dir = mkdtemp(prefix=f"{task_fullname}_", dir=scratch_path)
+    input_path = os.path.join(task_files_dir, "input")
+    output_path = os.path.join(task_files_dir, "output")
+    error_path = os.path.join(task_files_dir, "error")
 
-        command_path = os.path.join(task_files_dir, "command")
-        command_output_path = os.path.join(task_files_dir, "command_output")
-        command_error_path = os.path.join(task_files_dir, "command_error")
+    command_path = os.path.join(task_files_dir, "command")
+    command_output_path = os.path.join(task_files_dir, "command_output")
+    command_error_path = os.path.join(task_files_dir, "command_error")
 
-        if job.task.script:
-            # Careful. This will execute the body of the task in the host environment.
-            # The rest of redun all works like this so I'm not changing it here.
-            inner_command = [get_task_command(job.task, args, kwargs)]
-        else:
-            # Serialize arguments to input file.
-            with open(input_path, "wb") as f:
-                pickle_dump([args, kwargs], f)
-            inner_command = get_oneshot_command(job, input_path, output_path, error_path)
-
-        command = wrap_command(
-            inner_command, env_name, command_path, command_output_path, command_error_path
+    if job.task.script:
+        # Careful. This will execute the body of the task in the host environment.
+        # The rest of redun all works like this so I'm not changing it here.
+        inner_command = [get_task_command(job.task, args, kwargs)]
+    else:
+        # # Serialize arguments to input file.
+        # with open(input_path, "wb") as f:
+        #     pickle_dump([args, kwargs], f)
+        inner_command = get_oneshot_command(
+            scratch_path, job, job.task, args, kwargs, input_path=input_path, output_path=output_path, error_path=error_path
         )
-        cmd_result = subprocess.run(command, check=False, capture_output=False)
 
-        if not job.task.script:
-            return handle_oneshot_output(output_path, error_path, command_error_path)
-        else:
-            return handle_script_output(
-                cmd_result.returncode, command_output_path, command_error_path
-            )
-
-
-def get_oneshot_command(job: Job, input_path: str, output_path: str, error_path: str) -> List[str]:
-    """
-    Build up a shell command for executing a redun task using `redun oneshot`.
-    """
-    assert job.task
-
-    # Determine additional python import paths.
-    import_args = []
-    base_path = os.getcwd()
-    for abs_path in get_import_paths():
-        # Use relative paths so that they work inside the docker container.
-        rel_path = os.path.relpath(abs_path, base_path)
-        import_args.append("--import-path")
-        import_args.append(rel_path)
-
-    # Build job command.
-    cache_arg = [] if job.get_option("cache", True) else ["--no-cache"]
-    command = (
-        [
-            aws_utils.REDUN_PROG,
-            "--check-version",
-            aws_utils.REDUN_REQUIRED_VERSION,
-            "oneshot",
-            job.task.load_module,
-        ]
-        + import_args
-        + cache_arg
-        + [
-            "--input",
-            input_path,
-            "--output",
-            output_path,
-            "--error",
-            error_path,
-            job.task.fullname,
-        ]
+    command = wrap_command(
+        inner_command, env_name, command_path, command_output_path, command_error_path
     )
-    return command
+    cmd_result = subprocess.run(command, check=False, capture_output=False)
+
+    if not job.task.script:
+        return handle_oneshot_output(output_path, error_path, command_error_path)
+    else:
+        return handle_script_output(
+            cmd_result.returncode, command_output_path, command_error_path
+        )
 
 
 def wrap_command(

@@ -1,22 +1,34 @@
 import os
+import subprocess
 import time
 import threading
 from typing import Dict, List, Tuple
 
 from redun import task
 
+redun_namespace = "redun.examples.conda"
 
-@task(executor="conda", conda='my_env')
+
+@task(executor="conda", conda="my_env")
 def run_in_conda_process(x: int) -> Tuple[int, int, int]:
     # Return the process id (pid) to prove this task runs in its own process.
     time.sleep(1)
-    return (os.getpid(), threading.get_ident(), x + 1)
-
+    return (
+        os.getpid(),
+        threading.get_ident(),
+        subprocess.run(["python", "--version"], capture_output=True).stdout.decode(),
+        x + 1,
+    )
 
 @task()
 def regular_task(x):
     time.sleep(1)
-    return (os.getpid(), threading.get_ident(), x + 1)
+    return (
+        os.getpid(),
+        threading.get_ident(),
+        subprocess.run(["python", "--version"], capture_output=True).stdout.decode(),
+        x + 1,
+    )
 
 
 @task()
