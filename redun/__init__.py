@@ -1,12 +1,10 @@
 from redun.executors.alias import AliasExecutor
 from redun.executors.aws_batch import AWSBatchExecutor
 from redun.executors.aws_glue import AWSGlueExecutor
-from redun.executors.aws_batch import AWSBatchExecutor  # noqa: F401
-from redun.executors.aws_glue import AWSGlueExecutor  # noqa: F401
-from redun.executors.conda import CondaExecutor  # noqa: F401
-from redun.executors.local import LocalExecutor  # noqa: F401
-from redun.file import Dir, File, ShardedS3Dataset  # noqa: F401
-from redun.handle import Handle  # noqa: F401
+from redun.executors.conda import CondaExecutor
+from redun.executors.local import LocalExecutor
+from redun.file import Dir, File, ShardedS3Dataset
+from redun.handle import Handle
 from redun.executors.docker import DockerExecutor
 try:
     from redun.executors.k8s import K8SExecutor
@@ -14,9 +12,6 @@ except ModuleNotFoundError:
     # Skip k8s executor if kubernetes is not installed.
     pass
 from redun.executors.gcp_batch import GCPBatchExecutor
-from redun.executors.local import LocalExecutor
-from redun.file import Dir, File, ShardedS3Dataset
-from redun.handle import Handle
 from redun.namespace import get_current_namespace, namespace
 from redun.scheduler import (
     Scheduler,
