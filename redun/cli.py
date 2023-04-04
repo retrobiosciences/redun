@@ -66,13 +66,16 @@ from redun.backends.db.dataflow import display_dataflow, make_dataflow_dom, walk
 from redun.backends.db.query import CallGraphQuery
 from redun.backends.db.serializers import RecordSerializer
 from redun.config import Config, create_config_section
-from redun.executors.aws_batch import (
-    BATCH_LOG_GROUP,
-    AWSBatchExecutor,
-    aws_describe_jobs,
-    format_log_stream_event,
-)
-from redun.executors.aws_utils import iter_log_stream
+try:
+    from redun.executors.aws_batch import (
+        BATCH_LOG_GROUP,
+        AWSBatchExecutor,
+        aws_describe_jobs,
+        format_log_stream_event,
+    )
+    from redun.executors.aws_utils import iter_log_stream
+except ModuleNotFoundError:
+    pass
 from redun.executors.base import Executor, get_executors_from_config
 from redun.executors.code_packaging import extract_tar
 from redun.expression import TaskExpression

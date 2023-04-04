@@ -22,10 +22,13 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-import boto3
-import fsspec
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+except ImportError:
+    pass
 import s3fs
-from botocore.exceptions import ClientError
+import fsspec
 
 from redun import glue
 from redun.hashing import hash_stream, hash_struct

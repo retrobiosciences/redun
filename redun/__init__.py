@@ -1,14 +1,29 @@
 from redun.executors.alias import AliasExecutor
-from redun.executors.aws_batch import AWSBatchExecutor
-from redun.executors.aws_glue import AWSGlueExecutor
-from redun.executors.conda import CondaExecutor
-from redun.executors.docker import DockerExecutor
+try:
+    from redun.executors.aws_batch import AWSBatchExecutor
+except ModuleNotFoundError:
+    pass
+try:
+    from redun.executors.aws_glue import AWSGlueExecutor
+except ModuleNotFoundError:
+    pass
+try:
+    from redun.executors.conda import CondaExecutor
+except ModuleNotFoundError:
+    pass
+try:
+    from redun.executors.docker import DockerExecutor
+except ModuleNotFoundError:
+    pass
+try:
+    from redun.executors.gcp_batch import GCPBatchExecutor
+except ModuleNotFoundError:
+    pass
 try:
     from redun.executors.k8s import K8SExecutor
 except ModuleNotFoundError:
-    # Skip k8s executor if kubernetes is not installed.
+    # Skip executor if not installed.
     pass
-from redun.executors.gcp_batch import GCPBatchExecutor
 from redun.executors.local import LocalExecutor
 from redun.file import Dir, File, ShardedS3Dataset
 from redun.handle import Handle
