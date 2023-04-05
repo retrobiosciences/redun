@@ -24,6 +24,10 @@ from redun.scripting import ScriptError, get_task_command
 CONDA_ENV_CREATION_TIMEOUT = 5 * 60  # 5 minutes
 
 class CondaEnvironment:
+    """
+    A class for managing a Conda environment.
+    Creates a new environment if it does not exist, otherwise reuses an existing environment.
+    """
     def __init__(
         self,
         env_name: Optional[str] = None,
@@ -106,6 +110,7 @@ class CondaEnvironment:
             
             self.env_dir = os.path.join(env_output_dir, ".conda")
 
+            # install extra pip requirements, if specified
             if self.pip_requirements_file:
                 pip_install_command = ["pip", "install", "-r", self.pip_requirements_file]
                 if self.env_name:
@@ -174,9 +179,9 @@ class CondaEnvironment:
 class CondaExecutor(Executor):
     """
     Executor that runs tasks and scripts in a local conda environment.
-    Tasks accept the following parameters:
-    - conda: Path to a conda environment file (either .yml or .lock), or a conda environment name
-    - pip: Path to a pip requirements file, python package name, or a list of python package names. Optional.
+    Tasks accept the following options:
+        - conda: Path to a conda environment file (either .yml or .lock), or a conda environment name
+        - pip: Path to a pip requirements file, python package name, or a list of python package names. Optional.
     """
 
     def __init__(
@@ -275,9 +280,9 @@ class CondaExecutor(Executor):
         assert job.task.script
         self._submit(job)
 
-def get_job_conda_environment(job: Job, env_base_path: Optional[str]):
+def get_job_conda_environment(job: Job, env_base_path: Optional[str]) -> CondaEnvironment:
     """
-    Return the conda environment name for the given job.
+    Return the conda environment for the given job.
     """
     conda_arg = job.get_option("conda")
     if conda_arg is None:
@@ -310,7 +315,7 @@ def get_job_conda_environment(job: Job, env_base_path: Optional[str]):
         else:
             return CondaEnvironment(env_file=conda_arg, pip_requirements_file=pip_requirements_file, output_dir=env_base_path)
     else:
-        # assume it's a name
+        # assume conda_arg is an env name
         return CondaEnvironment(env_name=conda_arg, pip_requirements_file=pip_requirements_file, output_dir=env_base_path)
 
 
