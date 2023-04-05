@@ -51,6 +51,25 @@ def run_in_conda_process_with_yml_and_pip(x: int) -> Tuple[int, int, int]:
         pandas.__version__,
     )
 
+@task(
+    executor="conda",
+    conda=os.path.join(os.path.dirname(__file__), "my_py310_redun_env.yml"),
+    pip=["pandas==2.0.0", "colorama==0.4.6"],
+)
+def run_in_conda_process_with_yml_and_pip2(x: int) -> Tuple[int, int, int]:
+    import pandas
+    import colorama
+
+    # Return the process id (pid) to prove this task runs in its own process.
+    time.sleep(1)
+    return (
+        os.getpid(),
+        threading.get_ident(),
+        subprocess.run(["python", "--version"], capture_output=True).stdout.decode(),
+        x + 1,
+        pandas.__version__,
+        colorama.__version__,
+    )
 
 @task(
     executor="conda", conda=os.path.join(os.path.dirname(__file__), "my_py27_env.yml"), script=True
@@ -100,13 +119,17 @@ def main(n: int = 5) -> Dict[str, List[Tuple[int, int, int]]]:
     # check pip
     result4 = [run_in_conda_process_with_yml_and_pip(i) for i in data]
 
+    # check pip with 2 packages
+    result5 = [run_in_conda_process_with_yml_and_pip2(i) for i in data]
+
     # check script
-    result5 = [run_script_in_conda_process_with_yml(i) for i in data]
+    result6 = [run_script_in_conda_process_with_yml(i) for i in data]
 
     return {
         "run_in_conda_process_with_yml": result,
         "regular_task": result2,
         "regular_task_options": result3,
         "run_in_conda_process_with_yml_and_pip": result4,
-        "run_script_in_conda_process_with_yml": result5,
+        "run_in_conda_process_with_yml_and_pip2": result5,
+        "run_script_in_conda_process_with_yml": result6,
     }
