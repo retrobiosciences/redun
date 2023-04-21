@@ -408,7 +408,6 @@ def execute(
     command = wrap_command(
         inner_command, conda_env.get_conda_command(), command_path, command_output_path, command_error_path
     )
-    print(command)
     cmd_result = subprocess.run(command, check=False, capture_output=False)
 
     if not job.task.script:
@@ -434,7 +433,7 @@ def wrap_command(
     inner_cmd_str = " ".join(quote(token) for token in conda_command)
     with open(command_path, "wt") as cmd_f:
         cmd_f.write(inner_cmd_str)
-    print(inner_cmd_str)
+
     wrapped_command = [
         "bash",
         "-c",
