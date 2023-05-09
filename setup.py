@@ -10,13 +10,11 @@ requirements = [
     # By using the extra deps boto3 and awscli, we help the solver find
     # a solution faster, since aiobotocore currently requires pinned dependencies of
     # boto3 and awscli.
-    "aiobotocore[boto3,awscli]>=2.0.1",
+    "aiobotocore[boto3,awscli]>=2.5.0",
     "aiohttp>=3.7.4,<4",
     "alembic>=1.4",
     "boto3>=1.16.63",
-    # Temporarily cap botocore version until bug is fixed
-    # https://github.com/iterative/dvc/issues/8513#issuecomment-1298761683
-    "botocore>=1.22.8,<1.28.0",
+    "botocore>=1.29.76,<1.29.77",
     "gcsfs>=2021.4.0",
     "google-cloud-batch>=0.2.0",
     "s3fs>=2021.11.1",
