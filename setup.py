@@ -10,7 +10,7 @@ requirements = [
     # By using the extra deps boto3 and awscli, we help the solver find
     # a solution faster, since aiobotocore currently requires pinned dependencies of
     # boto3 and awscli.
-    "aiobotocore>=2.5.0",
+    #"aiobotocore>=2.5.0",
     "aiohttp>=3.7.4,<4",
     "alembic>=1.4",
     # "boto3==1.24.59",
