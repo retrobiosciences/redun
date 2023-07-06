@@ -5,8 +5,10 @@ from statistics import mean
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import requests
-
+from google.api_core import gapic_v1
 from google.cloud import batch_v1
+
+from redun.version import version
 
 
 # List of supported available CPU Platforms
@@ -25,11 +27,19 @@ class MinCPUPlatform(Enum):
 def get_gcp_client(
     sync: bool = True,
 ) -> Union[batch_v1.BatchServiceClient, batch_v1.BatchServiceAsyncClient]:
-    return batch_v1.BatchServiceClient() if sync else batch_v1.BatchServiceAsyncClient()
+    # TODO: Integrate redun version here later.
+    client_info = gapic_v1.client_info.ClientInfo(user_agent=f"redun/{version}")
+    return (
+        batch_v1.BatchServiceClient(client_info=client_info)
+        if sync
+        else batch_v1.BatchServiceAsyncClient(client_info=client_info)
+    )
+
 
 def gb_to_mib(gb):
     # Convert GiB to MiB.
     return int(gb * 1024)
+
 
 def batch_submit(
     client: Union[batch_v1.BatchServiceClient, batch_v1.BatchServiceAsyncClient],
@@ -83,15 +93,9 @@ def batch_submit(
         runnable.container = batch_v1.Runnable.Container()
         runnable.container.image_uri = image
         runnable.container.commands = commands
-        # TODO: is this needed?
-        # runnable.container.options = "".join(
-        #     [f" -v {x.mount_path}:{x.mount_path}" for x in volumes]
-        # )
         runnable.container.options = " ".join(container_options)
         runnable.container.volumes = container_volumes
         runnable.container.volumes += [f"{x.mount_path}:{x.mount_path}" for x in volumes]
-        # TODO: this causes an error, going back to the above
-        # runnable.container.volumes = [','.join([f"{x.mount_path}:{x.mount_path}" for x in volumes])]
 
     task = batch_v1.TaskSpec()
     task.runnables = [runnable]
@@ -115,7 +119,7 @@ sudo mount --bind /var/lib/nvidia /var/lib/nvidia
 echo "$(date) Mounting driver folder" | sudo tee -a /var/log/startupscript.log
 echo $(mount | grep nvidia) | sudo tee -a /var/log/startupscript.log
 sudo mount -o remount,exec /var/lib/nvidia
-"""
+""",
         ]
         gpu_install_runnable_1.container.volumes = ["/mnt/disks:/mnt/disks"]
 
@@ -133,7 +137,12 @@ sudo mount -o remount,exec /var/lib/nvidia
         gpu_install_runnable_3.ignore_exit_status = True
         gpu_install_runnable_3.script = batch_v1.Runnable.Script()
         gpu_install_runnable_3.script.path = "/mnt/disks/install_gpu_drivers.sh"
-        task.runnables = [gpu_install_runnable_1, gpu_install_runnable_2, gpu_install_runnable_3, runnable]
+        task.runnables = [
+            gpu_install_runnable_1,
+            gpu_install_runnable_2,
+            gpu_install_runnable_3,
+            runnable,
+        ]
 
     # We can specify what resources are requested by each task.
     resources = batch_v1.ComputeResource()
@@ -328,7 +337,8 @@ def get_task(client: batch_v1.BatchServiceClient, task_name: str) -> batch_v1.Ta
     return client.get_task(name=task_name)
 
 
-# largely based on nextflow's implementation: https://github.com/nextflow-io/nextflow/blob/master/plugins/nf-google/src/main/nextflow/cloud/google/batch/GoogleBatchMachineTypeSelector.groovy
+# largely based on nextflow's implementation:
+# https://github.com/nextflow-io/nextflow/blob/master/plugins/nf-google/src/main/nextflow/cloud/google/batch/GoogleBatchMachineTypeSelector.groovy
 @dataclass
 class MachineType:
     type: str
@@ -377,7 +387,8 @@ def find_best_matching_machine_type(
     if gpus > 0:
         # seqera's cloudinfo doesn't have GPU prices yet
         raise NotImplementedError(
-            "Automatic machine type selection is not implemented yet for GPU instances. Specify machine type manually."
+            "Automatic machine type selection is not implemented yet for GPU instances. "
+            "Specify machine type manually."
         )
     FAMILY_COST_CORRECTION = {
         "e2": 1.0,  # Mix of processors, tend to be similar in performance to N1
