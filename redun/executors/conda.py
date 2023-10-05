@@ -108,10 +108,13 @@ class CondaEnvironment:
                         self.env_dir = os.path.join(env_output_dir, ".conda")
                         return
                     time.sleep(1)
-                raise RuntimeError(
-                    f"Conda environment directory `{env_output_dir}` already exists, "
-                    "but is not a valid environment. Consider deleting it and trying again."
-                )
+                
+                # let's check if the folder is empty - if it is, we can create the environment in this process
+                if len(os.listdir(env_output_dir)) != 0:
+                    raise RuntimeError(
+                        f"Conda environment directory `{env_output_dir}` already exists, "
+                        "but is not a valid environment. Consider deleting it and trying again."
+                    )
             else:
                 os.makedirs(env_output_dir)
 
