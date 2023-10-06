@@ -99,29 +99,25 @@ class CondaEnvironment:
                 self.env_dir = os.path.join(env_output_dir, ".conda")
                 return
 
-            if os.path.exists(env_output_dir):
-                # TODO: this can happen if the environment is currently being created,
-                # need to decide how to handle this
-                # for now wait for the environment to be created
-                for _ in range(CONDA_ENV_CREATION_TIMEOUT):
-                    if os.path.exists(os.path.join(env_output_dir, "redun_initialized")):
-                        self.env_dir = os.path.join(env_output_dir, ".conda")
-                        return
-                    time.sleep(1)
-                
-                # let's check if the folder is empty - if it is, we can create the environment in this process
-                if len(os.listdir(env_output_dir)) != 0:
-                    raise RuntimeError(
-                        f"Conda environment directory `{env_output_dir}` already exists, "
-                        "but is not a valid environment. Consider deleting it and trying again."
-                    )
-            else:
+            with self.conda_lockfile:
+                if os.path.exists(env_output_dir):
+                    # this can happen if the environment is currently being created,
+                    # for now wait for the environment to be created
+                    # if it takes too long, remove the folder and create it again
+                    for _ in range(CONDA_ENV_CREATION_TIMEOUT):
+                        if os.path.exists(os.path.join(env_output_dir, "redun_initialized")):
+                            self.env_dir = os.path.join(env_output_dir, ".conda")
+                            return
+                        time.sleep(1)
+                    
+                    # if the folder is not empty this is an invalid environment, so let's remove it
+                    if len(os.listdir(env_output_dir)) != 0:
+                        shutil.rmtree(env_output_dir)
                 os.makedirs(env_output_dir)
 
-            # Create the environment
-            # either we have conda environment files or conda lock files
-            if env_path.endswith(".yml") or env_path.endswith(".yaml"):
-                with self.conda_lockfile:
+                # Create the environment
+                # either we have conda environment files or conda lock files
+                if env_path.endswith(".yml") or env_path.endswith(".yaml"):
                     create_env_code, _, create_env_error = self._run_command(
                         [
                             self.conda_cmd,
@@ -134,9 +130,8 @@ class CondaEnvironment:
                         ],
                         capture_output=True,
                     )
-                shutil.copy(env_path, os.path.join(env_output_dir, "environment.yml"))
-            elif env_path.endswith(".lock"):
-                with self.conda_lockfile:
+                    shutil.copy(env_path, os.path.join(env_output_dir, "environment.yml"))
+                elif env_path.endswith(".lock"):
                     create_env_code, _, create_env_error = self._run_command(
                         [
                             self.conda_cmd,
@@ -148,46 +143,47 @@ class CondaEnvironment:
                         ],
                         capture_output=True,
                     )
-                shutil.copy(env_path, os.path.join(env_output_dir, "environment.lock"))
+                    shutil.copy(env_path, os.path.join(env_output_dir, "environment.lock"))
 
-            if create_env_code != 0:
-                # environment creation failed - remove it
-                shutil.rmtree(env_output_dir)
-                raise RuntimeError(
-                    f"Failed to create Conda environment `{env_output_dir}` "
-                    f"from file: {create_env_error}"
-                )
-
-            self.env_dir = os.path.join(env_output_dir, ".conda")
-
-            # install extra pip requirements, if specified
-            if self.pip_requirements_files:
-                for pip_req_file in self.pip_requirements_files:
-                    pip_install_command = ["pip", "install", "-r", pip_req_file]
-                    if self.env_name:
-                        pip_install_command = self.get_conda_command() + pip_install_command
-                    elif self.env_dir:
-                        pip_install_command = self.get_conda_command() + pip_install_command
-
-                    with self.pip_lockfile:
-                        pip_install_code, _, pip_install_error = self._run_command(
-                            pip_install_command, capture_output=True
-                        )
-                    pip_file_name = Path(pip_req_file).name
-                    pip_file_name = os.path.splitext(pip_file_name)[0]
-                    shutil.copy(
-                        pip_req_file,
-                        os.path.join(env_output_dir, f"pip_requirements.{pip_file_name}.txt"),
+                if create_env_code != 0:
+                    # environment creation failed - remove it
+                    shutil.rmtree(env_output_dir)
+                    raise RuntimeError(
+                        f"Failed to create Conda environment `{env_output_dir}` "
+                        f"from file: {create_env_error}"
                     )
-                    if pip_install_code != 0:
-                        raise RuntimeError(
-                            "Failed to install pip requirements for conda environment "
-                            f"`{env_output_dir}: {pip_install_error}"
-                        )
 
-            # Create a file to indicate that the environment has been initialized
-            (Path(env_output_dir) / "redun_initialized").touch()
-            return
+                self.env_dir = os.path.join(env_output_dir, ".conda")
+
+                # install extra pip requirements, if specified
+                if self.pip_requirements_files:
+                    for pip_req_file in self.pip_requirements_files:
+                        pip_install_command = ["pip", "install", "-r", pip_req_file]
+                        if self.env_name:
+                            pip_install_command = self.get_conda_command() + pip_install_command
+                        elif self.env_dir:
+                            pip_install_command = self.get_conda_command() + pip_install_command
+
+                        with self.pip_lockfile:
+                            pip_install_code, _, pip_install_error = self._run_command(
+                                pip_install_command, capture_output=True
+                            )
+                        pip_file_name = Path(pip_req_file).name
+                        pip_file_name = os.path.splitext(pip_file_name)[0]
+                        shutil.copy(
+                            pip_req_file,
+                            os.path.join(env_output_dir, f"pip_requirements.{pip_file_name}.txt"),
+                        )
+                        if pip_install_code != 0:
+                            shutil.rmtree(env_output_dir)
+                            raise RuntimeError(
+                                "Failed to install pip requirements for conda environment "
+                                f"`{env_output_dir}: {pip_install_error}"
+                            )
+
+                # Create a file to indicate that the environment has been initialized
+                (Path(env_output_dir) / "redun_initialized").touch()
+                return
 
         env_list_code, env_list_output, _ = self._run_command(
             [self.conda_cmd, "env", "list"], capture_output=True
