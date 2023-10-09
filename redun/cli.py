@@ -1631,6 +1631,7 @@ class RedunClient:
         else:
             launch_script(
                 config,
+                executor=executor,
                 executor_name=executor_name,
                 script_command=extra_args,
                 task_options=task_options,
