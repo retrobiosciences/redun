@@ -113,7 +113,7 @@ class CondaEnvironment:
                     # if the folder is not empty this is an invalid environment, so let's remove it
                     if len(os.listdir(env_output_dir)) != 0:
                         shutil.rmtree(env_output_dir)
-                os.makedirs(env_output_dir)
+                os.makedirs(env_output_dir, exist_ok=True)
 
                 # Create the environment
                 # either we have conda environment files or conda lock files
